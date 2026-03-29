@@ -3,11 +3,11 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "fatimazahraab/todo-app"
-        DOCKER_TAG   = "${env.GIT_COMMIT.take(7)}" // version unique par commit
+        DOCKER_TAG   = "${env.GIT_COMMIT.take(7)}" // Tag unique par commit
         IMAGE        = "${DOCKER_IMAGE}:${DOCKER_TAG}"
     }
 
-    // Déclenche le pipeline automatiquement quand GitHub envoie un push
+    // Déclenche le pipeline automatiquement via GitHub webhook
     triggers {
         githubPush()
     }
@@ -20,7 +20,7 @@ pipeline {
             }
         }
 
-        stage('Login to DockerHub') {
+        stage('Docker Login') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-creds',
@@ -47,26 +47,22 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
+                echo "🛠 Build Docker image : ${IMAGE}"
                 bat 'docker build -t %IMAGE% .'
             }
         }
 
         stage('Push Docker Image') {
             steps {
+                echo "Push Docker image : ${IMAGE}"
                 bat 'docker push %IMAGE%'
-            }
-        }
-
-        stage('Debug Files') {
-            steps {
-                bat 'dir'
-                bat 'dir k8s'
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    echo "Deploying image ${IMAGE} to Kubernetes"
                     bat """
                     kubectl --kubeconfig=%KUBECONFIG% apply -f k8s/deployment.yaml
                     kubectl --kubeconfig=%KUBECONFIG% apply -f k8s/service.yaml
