@@ -7,6 +7,24 @@ pipeline {
 
     stages {
 
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Login to DockerHub (fix pull/build)') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                }
+            }
+        }
+
         stage('Install dependencies') {
             steps {
                 bat 'py -m pip install -r requirements.txt'
@@ -16,25 +34,13 @@ pipeline {
 
         stage('Test') {
             steps {
-                bat 'py -m pytest'
+                bat 'py -m pytest -v'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 bat 'docker build -t %DOCKER_IMAGE% .'
-            }
-        }
-
-        stage('Login to DockerHub') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
-                }
             }
         }
 
@@ -49,6 +55,15 @@ pipeline {
                 bat 'kubectl apply -f deployment.yaml'
                 bat 'kubectl apply -f service.yaml'
             }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline SUCCESS "
+        }
+        failure {
+            echo "Pipeline FAILED check logs"
         }
     }
 }
