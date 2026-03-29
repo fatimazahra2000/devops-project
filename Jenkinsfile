@@ -7,12 +7,6 @@ pipeline {
 
     stages {
 
-        stage('Clone') {
-            steps {
-                git 'https://github.com/fatimazahra2000/devops-project.git'
-            }
-        }
-
         stage('Install dependencies') {
             steps {
                 bat 'python -m pip install -r requirements.txt'
