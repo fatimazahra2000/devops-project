@@ -2,19 +2,24 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "fatimazahraab/todo-app:v1"
+        DOCKER_IMAGE = "fatimazahraab/todo-app"
+        DOCKER_TAG   = "${env.GIT_COMMIT.take(7)}" // version unique par commit
+        IMAGE        = "${DOCKER_IMAGE}:${DOCKER_TAG}"
+    }
+
+    // Déclenche le pipeline automatiquement quand GitHub envoie un push
+    triggers {
+        githubPush()
     }
 
     stages {
 
-        // Checkout du repo
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        //  Login DockerHub
         stage('Login to DockerHub') {
             steps {
                 withCredentials([usernamePassword(
@@ -27,56 +32,58 @@ pipeline {
             }
         }
 
-        // Installer les dépendances Python
         stage('Install dependencies') {
             steps {
-                bat 'py -m pip install --upgrade pip'
                 bat 'py -m pip install -r requirements.txt'
                 bat 'py -m pip install pytest'
             }
         }
 
-        // Lancer les tests
         stage('Test') {
             steps {
                 bat 'py -m pytest -v'
             }
         }
 
-        //  Build Docker Image
         stage('Build Docker Image') {
             steps {
-                bat 'docker build -t %DOCKER_IMAGE% .'
+                bat 'docker build -t %IMAGE% .'
             }
         }
 
-        //  Push Docker Image
         stage('Push Docker Image') {
             steps {
-                bat 'docker push %DOCKER_IMAGE%'
+                bat 'docker push %IMAGE%'
             }
         }
 
-        //  Déploiement Kubernetes sécurisé avec kubeconfig
+        stage('Debug Files') {
+            steps {
+                bat 'dir'
+                bat 'dir k8s'
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                    bat '''
+                    bat """
                     kubectl --kubeconfig=%KUBECONFIG% apply -f k8s/deployment.yaml
                     kubectl --kubeconfig=%KUBECONFIG% apply -f k8s/service.yaml
-                    '''
+                    kubectl --kubeconfig=%KUBECONFIG% set image deployment/todo-app todo-app=%IMAGE% --record
+                    kubectl --kubeconfig=%KUBECONFIG% rollout status deployment/todo-app
+                    """
                 }
             }
         }
-
-    } // end stages
+    }
 
     post {
         success {
-            echo "Pipeline SUCCESS"
+            echo "Pipeline SUCCESS - Image déployée : ${IMAGE}"
         }
         failure {
-            echo "Pipeline FAILED - check logs"
+            echo "Pipeline FAILED - Vérifier les logs"
         }
     }
 }
