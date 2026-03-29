@@ -50,10 +50,17 @@ pipeline {
             }
         }
 
+        stage('Debug Files') {
+            steps {
+                bat 'dir'
+                bat 'dir k8s'
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
-                bat 'kubectl apply -f deployment.yaml'
-                bat 'kubectl apply -f service.yaml'
+                bat 'kubectl apply -f k8s/deployment.yaml'
+                bat 'kubectl apply -f k8s/service.yaml'
             }
         }
     }
